@@ -19,6 +19,9 @@ module Herb
       def erb_comment?: (String) -> bool
 
       # : (String) -> bool
+      def erb_escaped?: (String) -> bool
+
+      # : (String) -> bool
       def erb_graphql?: (String) -> bool
 
       # : (String) -> bool

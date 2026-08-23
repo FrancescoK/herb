@@ -40,6 +40,11 @@ module Herb
       end
 
       #: (String) -> bool
+      def erb_escaped?(opening)
+        opening.start_with?("<%%")
+      end
+
+      #: (String) -> bool
       def erb_graphql?(opening)
         opening.start_with?("<%graphql")
       end
