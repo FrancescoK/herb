@@ -20,6 +20,7 @@ module Herb
 
         @engine = engine
         @escape = options.fetch(:escape) { options.fetch(:escape_html, false) }
+        @trim = options[:trim] != false
         @tokens = [] #: Array[untyped]
         @element_stack = [] #: Array[String]
         @context_stack = [:html_content]
@@ -74,9 +75,9 @@ module Herb
 
           if node.open_tag.is_a?(Herb::AST::ERBOpenTagNode) && tag_name && node.close_tag
             if node.close_tag.is_a?(Herb::AST::ERBEndNode)
-              remove_trailing_whitespace_from_last_token! if left_trim?(node.close_tag)
+              remove_trailing_whitespace_from_last_token! if @trim && left_trim?(node.close_tag)
               add_text("</#{tag_name}>")
-              @trim_next_whitespace = true
+              @trim_next_whitespace = true if @trim
             else
               add_text("</#{tag_name}>")
             end
@@ -343,11 +344,11 @@ module Herb
       end
 
       def visit_erb_block_end_node(node, escaped: false)
-        remove_trailing_whitespace_from_last_token! if left_trim?(node)
+        remove_trailing_whitespace_from_last_token! if @trim && left_trim?(node)
 
         code = node.content.value.strip
 
-        if at_line_start?
+        if @trim && at_line_start?
           leading_space = extract_and_remove_leading_space!
           right_space = " \n"
 
@@ -425,6 +426,8 @@ module Herb
         check_for_escaped_erb_tag!(opening)
 
         if !skip_comment_check && erb_comment?(opening)
+          return unless @trim
+
           follows_newline = leading_space_follows_newline?
           remove_trailing_whitespace_from_last_token! if left_trim?(node)
 
@@ -658,6 +661,8 @@ module Herb
       end
 
       def apply_trim(node, code)
+        return add_code(code) unless @trim
+
         follows_newline = leading_space_follows_newline?
         removed_whitespace = left_trim?(node) ? remove_trailing_whitespace_from_last_token! : ""
 
