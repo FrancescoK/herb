@@ -47,6 +47,12 @@ module Herb
       "'" => "&#39;",
     }.freeze
 
+    ATTRIBUTE_ESCAPE_TABLE = ESCAPE_TABLE.merge(
+      "\n" => "&#10;",
+      "\r" => "&#13;",
+      "\t" => "&#9;"
+    ).freeze
+
     def initialize(input, properties = {})
       @context = VisitorContext.new(
         file_path: properties[:filename],
@@ -141,15 +147,7 @@ module Herb
     end
 
     def self.attr(value)
-      value.to_s
-           .gsub("&", "&amp;")
-           .gsub('"', "&quot;")
-           .gsub("'", "&#39;")
-           .gsub("<", "&lt;")
-           .gsub(">", "&gt;")
-           .gsub("\n", "&#10;")
-           .gsub("\r", "&#13;")
-           .gsub("\t", "&#9;")
+      value.to_s.gsub(/[&<>"'\n\r\t]/, ATTRIBUTE_ESCAPE_TABLE)
     end
 
     def self.js(value)

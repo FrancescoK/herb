@@ -1,10 +1,25 @@
-export interface RuntimeDiagnostic {
+export type DiagnosticSeverity = "error" | "warning" | "info" | "hint"
+
+export interface DiagnosticPosition {
+  line: number
+  column: number
+}
+
+export interface DiagnosticLocation {
+  start: DiagnosticPosition
+}
+
+export interface DiagnosticSpot {
+  location?: DiagnosticLocation
+}
+
+// TODO: this should probably just import the type from the dev-tools or core
+export interface RuntimeDiagnostic extends DiagnosticSpot {
   template: string
   message: string
   code?: string
-  severity?: "error" | "warning" | "info" | "hint"
+  severity?: DiagnosticSeverity
   origin?: string
-  location?: { start: { line: number; column: number } }
   suggestion?: string
   value?: string
   element?: Element | null
@@ -31,7 +46,9 @@ export function report(diagnostic: RuntimeDiagnostic): void {
   const devTools = currentDevTools()
 
   if (devTools?.report) {
-    if (queued.length > 0) devTools.report(queued.splice(0))
+    if (queued.length > 0) {
+      devTools.report(queued.splice(0))
+    }
 
     devTools.report(entry)
 
@@ -39,14 +56,26 @@ export function report(diagnostic: RuntimeDiagnostic): void {
   }
 
   if (debugging()) {
-    const log = entry.severity === "error" ? console.error : console.warn
+    let log = console.warn
 
-    log(`[herb] ${entry.message}${entry.suggestion ? `. ${entry.suggestion}` : ""}`, entry)
+    if (entry.severity === "error") {
+      log = console.error
+    }
+
+    let suffix = ""
+
+    if (entry.suggestion) {
+      suffix = `. ${entry.suggestion}`
+    }
+
+    log(`[herb] ${entry.message}${suffix}`, entry)
   }
 
   queued.push(entry)
 
-  if (queued.length > MAX_QUEUED) queued.shift()
+  if (queued.length > MAX_QUEUED) {
+    queued.shift()
+  }
 
   arm()
 }
@@ -54,7 +83,9 @@ export function report(diagnostic: RuntimeDiagnostic): void {
 export function flushReports(): number {
   const devTools = currentDevTools()
 
-  if (!devTools?.report || queued.length === 0) return 0
+  if (!devTools?.report || queued.length === 0) {
+    return 0
+  }
 
   const flushed = queued.splice(0)
 
@@ -69,15 +100,23 @@ export function resetReport(): void {
 }
 
 function currentDevTools(): DevToolsGlobal | undefined {
-  return globalThis.window ? (window as { HerbDevTools?: DevToolsGlobal }).HerbDevTools : undefined
+  if (!globalThis.window) {
+    return undefined
+  }
+
+  return (window as { HerbDevTools?: DevToolsGlobal }).HerbDevTools
 }
 
 function arm(): void {
-  if (typeof document === "undefined") return
+  if (typeof document === "undefined") {
+    return
+  }
 
   hookGlobal()
 
-  if (armed) return
+  if (armed) {
+    return
+  }
 
   armed = true
   document.addEventListener(DEV_TOOLS_START_EVENT, onDevToolsReady)
@@ -87,7 +126,9 @@ function arm(): void {
 function disarm(): void {
   unhookGlobal()
 
-  if (!armed) return
+  if (!armed) {
+    return
+  }
 
   armed = false
   document.removeEventListener(DEV_TOOLS_START_EVENT, onDevToolsReady)
@@ -99,13 +140,23 @@ function onDevToolsReady(): void {
 }
 
 function hookGlobal(): void {
-  if (typeof window === "undefined") return
+  if (typeof window === "undefined") {
+    return
+  }
 
   const descriptor = Object.getOwnPropertyDescriptor(window, "HerbDevTools")
 
-  if (descriptor?.get) return
-  if (descriptor && (descriptor.value !== undefined && descriptor.value !== null)) return
-  if (descriptor && descriptor.configurable === false) return
+  if (descriptor?.get) {
+    return
+  }
+
+  if (descriptor && (descriptor.value !== undefined && descriptor.value !== null)) {
+    return
+  }
+
+  if (descriptor && descriptor.configurable === false) {
+    return
+  }
 
   let current: DevToolsGlobal | undefined
 
@@ -116,7 +167,9 @@ function hookGlobal(): void {
     set: (value: DevToolsGlobal | undefined) => {
       current = value
 
-      if (value) queueMicrotask(flushReports)
+      if (value) {
+        queueMicrotask(flushReports)
+      }
     },
   })
 
@@ -124,17 +177,23 @@ function hookGlobal(): void {
 }
 
 function unhookGlobal(): void {
-  if (!hooked || typeof window === "undefined") return
+  if (!hooked || typeof window === "undefined") {
+    return
+  }
 
   hooked = false
 
   const descriptor = Object.getOwnPropertyDescriptor(window, "HerbDevTools")
 
-  if (descriptor?.get && descriptor.get() === undefined) delete (window as { HerbDevTools?: unknown }).HerbDevTools
+  if (descriptor?.get && descriptor.get() === undefined) {
+    delete (window as { HerbDevTools?: unknown }).HerbDevTools
+  }
 }
 
 export function clearOnNavigation(): () => void {
-  if (typeof document === "undefined") return () => {}
+  if (typeof document === "undefined") {
+    return () => {}
+  }
 
   const clear = (): void => {
     queued.length = 0
@@ -150,7 +209,9 @@ export function clearOnNavigation(): () => void {
 }
 
 function debugging(): boolean {
-  if (typeof document === "undefined") return false
+  if (typeof document === "undefined") {
+    return false
+  }
 
   return document.querySelector('meta[name="herb-debug-mode"][content="true"]') !== null
 }
