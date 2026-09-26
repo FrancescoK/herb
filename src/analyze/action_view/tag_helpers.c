@@ -506,6 +506,57 @@ static hb_array_T* prepend_stylesheet_link_tag_attributes(
   return attributes;
 }
 
+// `tag.attributes` drops nil values and dasherizes nested data/aria hashes, and
+// neither survives being written out as literal attributes: a value that is not
+// a literal may be nil at render time, and a nested hash has to be flattened
+// against a value only the runtime has. Expanding those loses attributes, so the
+// call is left for Action View unless every value is a literal.
+static bool tag_attributes_hash_is_literal(pm_node_t* node) {
+  pm_node_list_t* elements = NULL;
+
+  if (node->type == PM_HASH_NODE) {
+    elements = &((pm_hash_node_t*) node)->elements;
+  } else if (node->type == PM_KEYWORD_HASH_NODE) {
+    elements = &((pm_keyword_hash_node_t*) node)->elements;
+  } else {
+    return false;
+  }
+
+  for (size_t index = 0; index < elements->size; index++) {
+    pm_node_t* element = elements->nodes[index];
+
+    if (element->type != PM_ASSOC_NODE) { return false; }
+
+    pm_node_t* value = ((pm_assoc_node_t*) element)->value;
+
+    if (!value) { return false; }
+
+    switch (value->type) {
+      case PM_STRING_NODE:
+      case PM_INTERPOLATED_STRING_NODE:
+      case PM_SYMBOL_NODE:
+      case PM_INTEGER_NODE:
+      case PM_TRUE_NODE:
+      case PM_FALSE_NODE: break;
+      case PM_HASH_NODE:
+      case PM_KEYWORD_HASH_NODE:
+        if (!tag_attributes_hash_is_literal(value)) { return false; }
+        break;
+      default: return false;
+    }
+  }
+
+  return true;
+}
+
+static bool tag_attributes_expand_faithfully(pm_call_node_t* call_node) {
+  if (!call_node || !call_node->arguments || call_node->arguments->arguments.size == 0) { return false; }
+
+  return tag_attributes_hash_is_literal(
+    call_node->arguments->arguments.nodes[call_node->arguments->arguments.size - 1]
+  );
+}
+
 static AST_NODE_T* transform_tag_helper_with_attributes(
   AST_ERB_CONTENT_NODE_T* erb_node,
   analyze_ruby_context_T* context,
@@ -1840,7 +1891,7 @@ void transform_tag_helper_array(hb_array_T* array, analyze_ruby_context_T* conte
                      && string_equals(parse_context->info->tag_name, "attributes")) {
             hb_array_T* attributes = NULL;
 
-            if (parse_context->info->call_node) {
+            if (parse_context->info->call_node && tag_attributes_expand_faithfully(parse_context->info->call_node)) {
               attributes = extract_html_attributes_from_call_node(
                 parse_context->info->call_node,
                 parse_context->prism_source,
